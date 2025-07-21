@@ -117,7 +117,7 @@ import time
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, NamedTuple, overload
 
-from nvitop.api import libcuda, libcudart, libnvml
+from nvitop.api import libcuda, libcudart, libnvml, rocm
 from nvitop.api.process import GpuProcess
 from nvitop.api.utils import (
     NA,
@@ -289,10 +289,13 @@ class Device:  # pylint: disable=too-many-instance-attributes,too-many-public-me
     @classmethod
     def is_available(cls) -> bool:
         """Test whether there are any devices and the NVML library is successfully loaded."""
-        try:
-            return cls.count() > 0
-        except libnvml.NVMLError:
-            return False
+        if libnvml.NVML_FOUND:
+            try:
+                return cls.count() > 0
+            except libnvml.NVMLError:
+                return False
+        # TODO: Add ROCm support
+        return False
 
     @staticmethod
     def driver_version() -> str | NaType:
@@ -381,6 +384,9 @@ class Device:  # pylint: disable=too-many-instance-attributes,too-many-public-me
                 If RM detects a driver/library version mismatch, usually after an upgrade for NVIDIA
                 driver without reloading the kernel module.
         """
+        if not libnvml.NVML_FOUND:
+            # TODO: Add ROCm support
+            return 0
         return libnvml.nvmlQuery('nvmlDeviceGetCount', default=0)
 
     @classmethod
@@ -590,6 +596,9 @@ class Device:  # pylint: disable=too-many-instance-attributes,too-many-public-me
         if cls is not Device:
             # Use the subclass type if the type is explicitly specified
             return super().__new__(cls)
+
+        if not libnvml.NVML_FOUND:
+            return super().__new__(RocmDevice)
 
         # Auto subclass type inference logic goes here when `cls` is `Device` (e.g., calls `Device(...)`)
         match: re.Match | None = None
@@ -2938,6 +2947,12 @@ class CudaMigDevice(CudaDevice, MigDevice):  # type: ignore[misc]
     _nvml_index: tuple[int, int]  # type: ignore[assignment]
     index: tuple[int, int]  # type: ignore[assignment]
     nvml_index: tuple[int, int]  # type: ignore[assignment]
+
+
+class RocmDevice(Device, rocm.RocmDevice):
+    """Class for ROCm devices."""
+
+    pass
 
 
 def is_mig_device_uuid(uuid: str | None) -> bool:

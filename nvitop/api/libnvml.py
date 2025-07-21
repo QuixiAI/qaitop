@@ -37,9 +37,12 @@ from typing import ClassVar as _ClassVar
 
 # Python Bindings for the NVIDIA Management Library (NVML)
 # https://pypi.org/project/nvidia-ml-py
-import pynvml as _pynvml
-from pynvml import *  # noqa: F403 # pylint: disable=wildcard-import,unused-wildcard-import
-from pynvml import nvmlDeviceGetPciInfo  # appease mypy # noqa: F401 # pylint: disable=unused-import
+try:
+    import pynvml as _pynvml
+    from pynvml import *  # noqa: F403 # pylint: disable=wildcard-import,unused-wildcard-import
+    from pynvml import nvmlDeviceGetPciInfo  # appease mypy # noqa: F401 # pylint: disable=unused-import
+except ImportError:
+    _pynvml = None
 
 from nvitop.api.utils import NA, UINT_MAX, ULONGLONG_MAX, NaType
 from nvitop.api.utils import colored as __colored
@@ -64,8 +67,9 @@ __all__ = [  # will be updated in below
     'nvmlShutdown',
 ]
 
+NVML_FOUND: bool = _pynvml is not None
 
-if not callable(getattr(_pynvml, 'nvmlInitWithFlags', None)):
+if NVML_FOUND and not callable(getattr(_pynvml, 'nvmlInitWithFlags', None)):
     raise ImportError(  # noqa: TRY004
         'Your installed package `nvidia-ml-py` is corrupted. Please reinstall package '
         '`nvidia-ml-py` via `pip3 install --force-reinstall nvidia-ml-py nvitop`.',
@@ -74,67 +78,123 @@ if not callable(getattr(_pynvml, 'nvmlInitWithFlags', None)):
 
 # Members from `pynvml` ############################################################################
 
-NVMLError: type[_pynvml.NVMLError] = _pynvml.NVMLError
-NVMLError.__doc__ = """Base exception class for NVML query errors."""
-NVMLError.__new__.__doc__ = """Map value to a proper subclass of :class:`NVMLError`."""
-nvmlExceptionClass: _Callable[[int], type[_pynvml.NVMLError]] = _pynvml.nvmlExceptionClass
-nvmlExceptionClass.__doc__ = """Map value to a proper subclass of :class:`NVMLError`."""
+if not NVML_FOUND:
+    # Define dummy classes and variables for type hints
+    if _TYPE_CHECKING:
 
-# Load members from module `pynvml` and register them in `__all__` and globals.
-_vars_pynvml = vars(_pynvml)
-_name = _attr = None
-_errcode_to_name = {}
-_const_names = []
-_errcode_to_string = NVMLError._errcode_to_string  # pylint: disable=protected-access
+        class NVMLError(Exception):
+            pass
 
-# 1. Put error classes in `__all__` first
-for _name, _attr in _vars_pynvml.items():
-    if _name in {'nvmlInit', 'nvmlInitWithFlags', 'nvmlShutdown'}:
-        continue
-    if _name.startswith(('NVML_ERROR_', 'NVMLError_')):
-        __all__.append(_name)  # noqa: PYI056
-        if _name.startswith('NVML_ERROR_'):
-            _errcode_to_name[_attr] = _name
-            _const_names.append(_name)
+        class c_nvmlDevice_t(_ctypes.c_void_p):
+            pass
 
-# 2. Then the remaining members
-for _name, _attr in _vars_pynvml.items():
-    if _name in {'nvmlInit', 'nvmlInitWithFlags', 'nvmlShutdown'}:
-        continue
-    if (_name.startswith('NVML_') and not _name.startswith('NVML_ERROR_')) or (
-        _name.startswith('nvml') and isinstance(_attr, _FunctionType)
-    ):
-        __all__.append(_name)  # noqa: PYI056
-        if _name.startswith('NVML_'):
-            _const_names.append(_name)
+        class c_nvmlFieldValue_t:
+            pass
 
-# 3. Add docstring to exception classes
-_errcode = _reason = _subclass = None
-for _errcode, _reason in _errcode_to_string.items():
-    _subclass = nvmlExceptionClass(_errcode)
-    _subclass.__doc__ = '{}. Code: :data:`{}` ({})'.format(
-        _reason.rstrip('.'),
-        _errcode_to_name[_errcode],
-        _errcode,
-    )
+    else:
+        NVMLError = Exception
+        c_nvmlDevice_t = object
+        c_nvmlFieldValue_t = object
+    NVML_SUCCESS = 0
+    NVML_ERROR_INSUFFICIENT_SIZE = 9
+    NVMLError_FunctionNotFound = NVMLError
+    NVMLError_GpuIsLost = NVMLError
+    NVMLError_InvalidArgument = NVMLError
+    NVMLError_LibraryNotFound = NVMLError
+    NVMLError_NoPermission = NVMLError
+    NVMLError_NotFound = NVMLError
+    NVMLError_NotSupported = NVMLError
+    NVMLError_Unknown = NVMLError
+    NVML_CLOCK_GRAPHICS = 0
+    NVML_CLOCK_SM = 1
+    NVML_CLOCK_MEM = 2
+    NVML_CLOCK_VIDEO = 3
+    NVML_TEMPERATURE_GPU = 0
+    NVML_DRIVER_WDDM = 0
+    NVML_DRIVER_WDM = 1
+    NVML_MEMORY_ERROR_TYPE_UNCORRECTED = 1
+    NVML_VOLATILE_ECC = 0
+    NVML_COMPUTEMODE_DEFAULT = 0
+    NVML_COMPUTEMODE_EXCLUSIVE_THREAD = 1
+    NVML_COMPUTEMODE_PROHIBITED = 2
+    NVML_COMPUTEMODE_EXCLUSIVE_PROCESS = 3
+    NVML_PCIE_UTIL_TX_BYTES = 0
+    NVML_PCIE_UTIL_RX_BYTES = 1
+    NVML_NVLINK_MAX_LINKS = 12
+    NVML_FI_DEV_NVLINK_LINK_COUNT = 100
+    NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_TX = 103
+    NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_RX = 104
+    NVML_FI_DEV_NVLINK_THROUGHPUT_RAW_TX = 105
+    NVML_FI_DEV_NVLINK_THROUGHPUT_RAW_RX = 106
+    NVML_VALUE_TYPE_DOUBLE = 0
+    NVML_VALUE_TYPE_UNSIGNED_INT = 1
+    NVML_VALUE_TYPE_UNSIGNED_LONG = 2
+    NVML_VALUE_TYPE_UNSIGNED_LONG_LONG = 3
+    NVML_VALUE_TYPE_SIGNED_LONG_LONG = 4
+    NVML_VALUE_TYPE_SIGNED_INT = 5
 
-# 4. Add undocumented constants into module docstring
-_data_docs = []
-_sphinx_doc = None
-for _name in _const_names:
-    _attr = _vars_pynvml[_name]
-    _sphinx_doc = f"""
+else:
+    NVMLError: type[_pynvml.NVMLError] = _pynvml.NVMLError
+    NVMLError.__doc__ = """Base exception class for NVML query errors."""
+    NVMLError.__new__.__doc__ = """Map value to a proper subclass of :class:`NVMLError`."""
+    nvmlExceptionClass: _Callable[[int], type[_pynvml.NVMLError]] = _pynvml.nvmlExceptionClass
+    nvmlExceptionClass.__doc__ = """Map value to a proper subclass of :class:`NVMLError`."""
+
+    # Load members from module `pynvml` and register them in `__all__` and globals.
+    _vars_pynvml = vars(_pynvml)
+    _name = _attr = None
+    _errcode_to_name = {}
+    _const_names = []
+    _errcode_to_string = NVMLError._errcode_to_string  # pylint: disable=protected-access
+
+    # 1. Put error classes in `__all__` first
+    for _name, _attr in _vars_pynvml.items():
+        if _name in {'nvmlInit', 'nvmlInitWithFlags', 'nvmlShutdown'}:
+            continue
+        if _name.startswith(('NVML_ERROR_', 'NVMLError_')):
+            __all__.append(_name)  # noqa: PYI056
+            if _name.startswith('NVML_ERROR_'):
+                _errcode_to_name[_attr] = _name
+                _const_names.append(_name)
+
+    # 2. Then the remaining members
+    for _name, _attr in _vars_pynvml.items():
+        if _name in {'nvmlInit', 'nvmlInitWithFlags', 'nvmlShutdown'}:
+            continue
+        if (_name.startswith('NVML_') and not _name.startswith('NVML_ERROR_')) or (
+            _name.startswith('nvml') and isinstance(_attr, _FunctionType)
+        ):
+            __all__.append(_name)  # noqa: PYI056
+            if _name.startswith('NVML_'):
+                _const_names.append(_name)
+
+    # 3. Add docstring to exception classes
+    _errcode = _reason = _subclass = None
+    for _errcode, _reason in _errcode_to_string.items():
+        _subclass = nvmlExceptionClass(_errcode)
+        _subclass.__doc__ = '{}. Code: :data:`{}` ({})'.format(
+            _reason.rstrip('.'),
+            _errcode_to_name[_errcode],
+            _errcode,
+        )
+
+    # 4. Add undocumented constants into module docstring
+    _data_docs = []
+    _sphinx_doc = None
+    for _name in _const_names:
+        _attr = _vars_pynvml[_name]
+        _sphinx_doc = f"""
 .. data:: {_name}
     :type: {_attr.__class__.__name__}
     :value: {_attr!r}
 """
-    if _name.startswith('NVML_ERROR_') and _attr in _errcode_to_string:
-        _reason = _errcode_to_string[_attr]
-        _sphinx_doc += """
+        if _name.startswith('NVML_ERROR_') and _attr in _errcode_to_string:
+            _reason = _errcode_to_string[_attr]
+            _sphinx_doc += """
     {}. See also class :class:`NVMLError` and :class:`{}`.
 """.format(_reason.rstrip('.'), nvmlExceptionClass(_attr).__name__)  # fmt: skip
-    _data_docs.append(_sphinx_doc.strip())
-__doc__ += """
+        _data_docs.append(_sphinx_doc.strip())
+    __doc__ += """
 
 ---------
 
@@ -158,69 +218,77 @@ Functions and Exceptions
 
 """.format('\n\n'.join(_data_docs))  # fmt: skip
 
-del (
-    _name,
-    _attr,
-    _vars_pynvml,
-    _errcode,
-    _reason,
-    _subclass,
-    _errcode_to_name,
-    _errcode_to_string,
-    _const_names,
-    _data_docs,
-    _sphinx_doc,
-)
+    del (
+        _name,
+        _attr,
+        _vars_pynvml,
+        _errcode,
+        _reason,
+        _subclass,
+        _errcode_to_name,
+        _errcode_to_string,
+        _const_names,
+        _data_docs,
+        _sphinx_doc,
+    )
 
-# 5. Add explicit references to appease linters
-# pylint: disable=no-member
-if _TYPE_CHECKING:
-    # pylint: disable-next=missing-class-docstring,too-few-public-methods,function-redefined
-    class c_nvmlDevice_t(_ctypes.c_void_p):
-        pass
+    # 5. Add explicit references to appease linters
+    # pylint: disable=no-member
+    if _TYPE_CHECKING:
+        # pylint: disable-next=missing-class-docstring,too-few-public-methods,function-redefined
+        class c_nvmlDevice_t(_ctypes.c_void_p):
+            pass
 
-else:
-    c_nvmlDevice_t: _TypeAlias = _pynvml.c_nvmlDevice_t  # type: ignore[no-redef] # noqa: PYI042
+    else:
+        c_nvmlDevice_t: _TypeAlias = _pynvml.c_nvmlDevice_t  # type: ignore[no-redef] # noqa: PYI042
 
-c_nvmlFieldValue_t: _TypeAlias = _pynvml.c_nvmlFieldValue_t  # noqa: PYI042
-NVML_SUCCESS: int = _pynvml.NVML_SUCCESS
-NVML_ERROR_INSUFFICIENT_SIZE: int = _pynvml.NVML_ERROR_INSUFFICIENT_SIZE
-NVMLError_FunctionNotFound: _TypeAlias = _pynvml.NVMLError_FunctionNotFound
-NVMLError_GpuIsLost: _TypeAlias = _pynvml.NVMLError_GpuIsLost
-NVMLError_InvalidArgument: _TypeAlias = _pynvml.NVMLError_InvalidArgument
-NVMLError_LibraryNotFound: _TypeAlias = _pynvml.NVMLError_LibraryNotFound
-NVMLError_NoPermission: _TypeAlias = _pynvml.NVMLError_NoPermission
-NVMLError_NotFound: _TypeAlias = _pynvml.NVMLError_NotFound
-NVMLError_NotSupported: _TypeAlias = _pynvml.NVMLError_NotSupported
-NVMLError_Unknown: _TypeAlias = _pynvml.NVMLError_Unknown
-NVML_CLOCK_GRAPHICS: int = _pynvml.NVML_CLOCK_GRAPHICS
-NVML_CLOCK_SM: int = _pynvml.NVML_CLOCK_SM
-NVML_CLOCK_MEM: int = _pynvml.NVML_CLOCK_MEM
-NVML_CLOCK_VIDEO: int = _pynvml.NVML_CLOCK_VIDEO
-NVML_TEMPERATURE_GPU: int = _pynvml.NVML_TEMPERATURE_GPU
-NVML_DRIVER_WDDM: int = _pynvml.NVML_DRIVER_WDDM
-NVML_DRIVER_WDM: int = _pynvml.NVML_DRIVER_WDM
-NVML_MEMORY_ERROR_TYPE_UNCORRECTED: int = _pynvml.NVML_MEMORY_ERROR_TYPE_UNCORRECTED
-NVML_VOLATILE_ECC: int = _pynvml.NVML_VOLATILE_ECC
-NVML_COMPUTEMODE_DEFAULT: int = _pynvml.NVML_COMPUTEMODE_DEFAULT
-NVML_COMPUTEMODE_EXCLUSIVE_THREAD: int = _pynvml.NVML_COMPUTEMODE_EXCLUSIVE_THREAD
-NVML_COMPUTEMODE_PROHIBITED: int = _pynvml.NVML_COMPUTEMODE_PROHIBITED
-NVML_COMPUTEMODE_EXCLUSIVE_PROCESS: int = _pynvml.NVML_COMPUTEMODE_EXCLUSIVE_PROCESS
-NVML_PCIE_UTIL_TX_BYTES: int = _pynvml.NVML_PCIE_UTIL_TX_BYTES
-NVML_PCIE_UTIL_RX_BYTES: int = _pynvml.NVML_PCIE_UTIL_RX_BYTES
-NVML_NVLINK_MAX_LINKS: int = _pynvml.NVML_NVLINK_MAX_LINKS
-NVML_FI_DEV_NVLINK_LINK_COUNT: int = _pynvml.NVML_FI_DEV_NVLINK_LINK_COUNT
-NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_TX: int = _pynvml.NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_TX
-NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_RX: int = _pynvml.NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_RX
-NVML_FI_DEV_NVLINK_THROUGHPUT_RAW_TX: int = _pynvml.NVML_FI_DEV_NVLINK_THROUGHPUT_RAW_TX
-NVML_FI_DEV_NVLINK_THROUGHPUT_RAW_RX: int = _pynvml.NVML_FI_DEV_NVLINK_THROUGHPUT_RAW_RX
-NVML_VALUE_TYPE_DOUBLE: int = getattr(_pynvml, 'NVML_VALUE_TYPE_DOUBLE', 0)
-NVML_VALUE_TYPE_UNSIGNED_INT: int = getattr(_pynvml, 'NVML_VALUE_TYPE_UNSIGNED_INT', 1)
-NVML_VALUE_TYPE_UNSIGNED_LONG: int = getattr(_pynvml, 'NVML_VALUE_TYPE_UNSIGNED_LONG', 2)
-NVML_VALUE_TYPE_UNSIGNED_LONG_LONG: int = getattr(_pynvml, 'NVML_VALUE_TYPE_UNSIGNED_LONG_LONG', 3)
-NVML_VALUE_TYPE_SIGNED_LONG_LONG: int = getattr(_pynvml, 'NVML_VALUE_TYPE_SIGNED_LONG_LONG', 4)
-NVML_VALUE_TYPE_SIGNED_INT: int = getattr(_pynvml, 'NVML_VALUE_TYPE_SIGNED_INT', 5)
-# pylint: enable=no-member
+    c_nvmlFieldValue_t: _TypeAlias = _pynvml.c_nvmlFieldValue_t  # noqa: PYI042
+    NVML_SUCCESS: int = _pynvml.NVML_SUCCESS
+    NVML_ERROR_INSUFFICIENT_SIZE: int = _pynvml.NVML_ERROR_INSUFFICIENT_SIZE
+    NVMLError_FunctionNotFound: _TypeAlias = _pynvml.NVMLError_FunctionNotFound
+    NVMLError_GpuIsLost: _TypeAlias = _pynvml.NVMLError_GpuIsLost
+    NVMLError_InvalidArgument: _TypeAlias = _pynvml.NVMLError_InvalidArgument
+    NVMLError_LibraryNotFound: _TypeAlias = _pynvml.NVMLError_LibraryNotFound
+    NVMLError_NoPermission: _TypeAlias = _pynvml.NVMLError_NoPermission
+    NVMLError_NotFound: _TypeAlias = _pynvml.NVMLError_NotFound
+    NVMLError_NotSupported: _TypeAlias = _pynvml.NVMLError_NotSupported
+    NVMLError_Unknown: _TypeAlias = _pynvml.NVMLError_Unknown
+    NVML_CLOCK_GRAPHICS: int = _pynvml.NVML_CLOCK_GRAPHICS
+    NVML_CLOCK_SM: int = _pynvml.NVML_CLOCK_SM
+    NVML_CLOCK_MEM: int = _pynvml.NVML_CLOCK_MEM
+    NVML_CLOCK_VIDEO: int = _pynvml.NVML_CLOCK_VIDEO
+    NVML_TEMPERATURE_GPU: int = _pynvml.NVML_TEMPERATURE_GPU
+    NVML_DRIVER_WDDM: int = _pynvml.NVML_DRIVER_WDDM
+    NVML_DRIVER_WDM: int = _pynvml.NVML_DRIVER_WDM
+    NVML_MEMORY_ERROR_TYPE_UNCORRECTED: int = _pynvml.NVML_MEMORY_ERROR_TYPE_UNCORRECTED
+    NVML_VOLATILE_ECC: int = _pynvml.NVML_VOLATILE_ECC
+    NVML_COMPUTEMODE_DEFAULT: int = _pynvml.NVML_COMPUTEMODE_DEFAULT
+    NVML_COMPUTEMODE_EXCLUSIVE_THREAD: int = _pynvml.NVML_COMPUTEMODE_EXCLUSIVE_THREAD
+    NVML_COMPUTEMODE_PROHIBITED: int = _pynvml.NVML_COMPUTEMODE_PROHIBITED
+    NVML_COMPUTEMODE_EXCLUSIVE_PROCESS: int = _pynvml.NVML_COMPUTEMODE_EXCLUSIVE_PROCESS
+    NVML_PCIE_UTIL_TX_BYTES: int = _pynvml.NVML_PCIE_UTIL_TX_BYTES
+    NVML_PCIE_UTIL_RX_BYTES: int = _pynvml.NVML_PCIE_UTIL_RX_BYTES
+    NVML_NVLINK_MAX_LINKS: int = _pynvml.NVML_NVLINK_MAX_LINKS
+    NVML_FI_DEV_NVLINK_LINK_COUNT: int = _pynvml.NVML_FI_DEV_NVLINK_LINK_COUNT
+    NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_TX: int = _pynvml.NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_TX
+    NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_RX: int = _pynvml.NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_RX
+    NVML_FI_DEV_NVLINK_THROUGHPUT_RAW_TX: int = _pynvml.NVML_FI_DEV_NVLINK_THROUGHPUT_RAW_TX
+    NVML_FI_DEV_NVLINK_THROUGHPUT_RAW_RX: int = _pynvml.NVML_FI_DEV_NVLINK_THROUGHPUT_RAW_RX
+    NVML_VALUE_TYPE_DOUBLE: int = getattr(_pynvml, 'NVML_VALUE_TYPE_DOUBLE', 0)
+    NVML_VALUE_TYPE_UNSIGNED_INT: int = getattr(_pynvml, 'NVML_VALUE_TYPE_UNSIGNED_INT', 1)
+    NVML_VALUE_TYPE_UNSIGNED_LONG: int = getattr(_pynvml, 'NVML_VALUE_TYPE_UNSIGNED_LONG', 2)
+    NVML_VALUE_TYPE_UNSIGNED_LONG_LONG: int = getattr(
+        _pynvml,
+        'NVML_VALUE_TYPE_UNSIGNED_LONG_LONG',
+        3,
+    )
+    NVML_VALUE_TYPE_SIGNED_LONG_LONG: int = getattr(
+        _pynvml,
+        'NVML_VALUE_TYPE_SIGNED_LONG_LONG',
+        4,
+    )
+    NVML_VALUE_TYPE_SIGNED_INT: int = getattr(_pynvml, 'NVML_VALUE_TYPE_SIGNED_INT', 5)
+    # pylint: enable=no-member
 
 # New members in `libnvml` #########################################################################
 
@@ -265,6 +333,8 @@ def _lazy_init() -> None:
             If cannot find function :func:`pynvml.nvmlInitWithFlags`, usually the :mod:`pynvml` module
             is overridden by other modules. Need to reinstall package ``nvidia-ml-py``.
     """
+    if not NVML_FOUND:
+        raise NVMLError_LibraryNotFound
     with __lock:
         if __initialized:
             return
@@ -287,6 +357,8 @@ def nvmlInit() -> None:  # pylint: disable=function-redefined
             If cannot find function :func:`pynvml.nvmlInitWithFlags`, usually the :mod:`pynvml` module
             is overridden by other modules. Need to reinstall package ``nvidia-ml-py``.
     """
+    if not NVML_FOUND:
+        raise NVMLError_LibraryNotFound
     nvmlInitWithFlags(0)
 
 
@@ -306,6 +378,9 @@ def nvmlInitWithFlags(flags: int) -> None:  # pylint: disable=function-redefined
             is overridden by other modules. Need to reinstall package ``nvidia-ml-py``.
     """
     global __flags, __initialized  # pylint: disable=global-statement,global-variable-not-assigned
+
+    if not NVML_FOUND:
+        raise NVMLError_LibraryNotFound
 
     with __lock:
         if len(__flags) > 0 and flags == __flags[-1]:
@@ -373,6 +448,9 @@ def nvmlShutdown() -> None:  # pylint: disable=function-redefined
     """
     global __flags, __initialized  # pylint: disable=global-statement,global-variable-not-assigned
 
+    if not NVML_FOUND:
+        return
+
     _pynvml.nvmlShutdown()
     with __lock:
         try:
@@ -428,6 +506,9 @@ def nvmlQuery(
             If passed with an invalid argument.
     """
     global UNKNOWN_FUNCTIONS  # pylint: disable=global-statement,global-variable-not-assigned
+
+    if not NVML_FOUND:
+        return default
 
     _lazy_init()
 
@@ -491,6 +572,10 @@ def nvmlQueryFieldValues(
         NVMLError_InvalidArgument:
             If device or field_ids is invalid.
     """
+    if not NVML_FOUND:
+        timestamp = _time.time_ns() // 1000
+        return [(NA, timestamp) for _ in range(len(field_ids))]
+
     field_values = nvmlQuery('nvmlDeviceGetFieldValues', handle, field_ids)
 
     if not nvmlCheckReturn(field_values):
